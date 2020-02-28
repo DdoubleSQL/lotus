@@ -176,6 +176,7 @@ func (a *StateAPI) StateReplay(ctx context.Context, tsk types.TipSetKey, mc cid.
 	return &api.ReplayResults{
 		Msg:     m,
 		Receipt: &r.MessageReceipt,
+		InternalMsgs: r.InternalMsgs,
 		Error:   errstr,
 	}, nil
 }

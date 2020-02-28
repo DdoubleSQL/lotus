@@ -62,6 +62,9 @@ type VMContext struct {
 
 	// address that started invoke chain
 	origin address.Address
+
+	// list of the internal invocations during this execution
+	internalMsgs []*types.Message
 }
 
 // Message is the message that kicked off the current invocation
@@ -151,6 +154,8 @@ func (vmc *VMContext) Send(to address.Address, method uint64, value types.BigInt
 		Params:   params,
 		GasLimit: vmc.gasAvailable,
 	}
+
+	vmc.internalMsgs = append(vmc.internalMsgs, msg)
 
 	ret, err, _ := vmc.vm.send(ctx, msg, vmc, 0)
 	return ret, err
@@ -341,6 +346,7 @@ type Rand interface {
 type ApplyRet struct {
 	types.MessageReceipt
 	ActorErr aerrors.ActorError
+	InternalMsgs []*types.Message
 }
 
 func (vm *VM) send(ctx context.Context, msg *types.Message, parent *VMContext,
@@ -512,6 +518,7 @@ func (vm *VM) ApplyMessage(ctx context.Context, msg *types.Message) (*ApplyRet, 
 			GasUsed:  gasUsed,
 		},
 		ActorErr: actorErr,
+		InternalMsgs: vmctx.internalMsgs,
 	}, nil
 }
 

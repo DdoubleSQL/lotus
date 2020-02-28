@@ -274,6 +274,7 @@ type RetrievalOrder struct {
 type ReplayResults struct {
 	Msg     *types.Message
 	Receipt *types.MessageReceipt
+	InternalMsgs []*types.Message
 	Error   string
 }
 
