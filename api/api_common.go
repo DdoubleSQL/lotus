@@ -11,6 +11,9 @@ import (
 
 type Permission = string
 
+/*
+定义节点通用功能
+ */
 type Common interface {
 	// Auth
 	AuthVerify(ctx context.Context, token string) ([]Permission, error)

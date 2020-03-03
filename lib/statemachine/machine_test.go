@@ -76,6 +76,10 @@ func TestBasic(t *testing.T) {
 	}
 }
 
+/**
+Test* 测试函数：测逻辑
+Benchmark* 基准测试函数：函数性能
+ */
 func TestPersist(t *testing.T) {
 	for i := 0; i < 1000; i++ { // run a few times to expose any races
 		ds := datastore.NewMapDatastore()

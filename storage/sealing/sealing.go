@@ -122,6 +122,7 @@ func (m *Sealing) SealPiece(ctx context.Context, size uint64, r io.Reader, secto
 
 func (m *Sealing) newSector(ctx context.Context, sid uint64, dealID uint64, ppi sectorbuilder.PublicPieceInfo) error {
 	log.Infof("Start sealing %d", sid)
+	// 根据sector ID以及上一步的扇区pieces信息，产生新扇区生成任务。发送事件至StateMachine扇区状态机。
 	return m.sectors.Send(sid, SectorStart{
 		id: sid,
 		pieces: []Piece{

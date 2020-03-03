@@ -45,8 +45,10 @@ func (s *StateGroup) Send(id interface{}, evt interface{}) (err error) {
 	s.lk.Lock()
 	defer s.lk.Unlock()
 
+	// 判断id是否存在
 	sm, exist := s.sms[statestore.ToKey(id)]
 	if !exist {
+		// 创建状态机
 		sm, err = s.loadOrCreate(id)
 		if err != nil {
 			return xerrors.Errorf("loadOrCreate state: %w", err)
@@ -54,9 +56,11 @@ func (s *StateGroup) Send(id interface{}, evt interface{}) (err error) {
 		s.sms[statestore.ToKey(id)] = sm
 	}
 
+	// 转发事件消息至状态机的eventsIn channel处。
 	return sm.send(Event{User: evt})
 }
 
+// 状态机创建流程
 func (s *StateGroup) loadOrCreate(name interface{}) (*StateMachine, error) {
 	exists, err := s.sts.Has(name)
 	if err != nil {

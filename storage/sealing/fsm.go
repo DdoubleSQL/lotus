@@ -12,6 +12,9 @@ import (
 	"github.com/filecoin-project/lotus/lib/statemachine"
 )
 
+/*
+Finite state machine 有限状态机
+ */
 func (m *Sealing) Plan(events []statemachine.Event, user interface{}) (interface{}, error) {
 	next, err := m.plan(events, user.(*SectorInfo))
 	if err != nil || next == nil {
@@ -108,6 +111,17 @@ func (m *Sealing) plan(events []statemachine.Event, state *SectorInfo) (func(sta
 
 	/*
 
+	Incoming：获取pieces数组大小，扇区id，每个pieces填充随机数，每个pieces生成凭据
+	          封装到交易信息中，广播到链，等待链上反馈，验证添加pieces到扇区，耗费cpu内存
+	Packing：检查扇区的完整性，不完整扇区，填充完整，更新扇区信息
+	Unsealed：密封数据，给每个数据片产生产生加密副本，产生大量的缓存数据，耗费内存
+	PreCommitting：将包含扇区存储凭据的相关信息广播到链
+	WaitSeed：等待链上消息，获取链上区块高度和一个延时区块量，
+	              定义两个在指定区块高度执行（密封seed更新）和回滚方法
+	Committing：链上随机挑战（指定区块高度执行的方法）产生PoRep，将产生PORep的证据提交到链，链上验证
+	CommitWait：等待链上的消息，接受链上的消息，验证状态，如果成功将状态转成Proving
+
+	整个完整的存储过程结束
 		*   Empty
 		|   |
 		|   v

@@ -16,6 +16,7 @@ import (
 	lcli "github.com/filecoin-project/lotus/cli"
 )
 
+// 作用是在一个扇区中存储随机数据
 var pledgeSectorCmd = &cli.Command{
 	Name:  "pledge-sector",
 	Usage: "store random data in a sector",

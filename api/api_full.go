@@ -14,6 +14,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+/**
+定义一个全节点的行为
+继承自Common
+ */
 // FullNode API is a low-level interface to the Filecoin network full node
 type FullNode interface {
 	Common

@@ -80,6 +80,9 @@ var SectorStates = []string{
 	FaultedFinal:  "FaultedFinal",
 }
 
+/**
+存储矿工
+ */
 // StorageMiner is a low-level interface to the Filecoin network storage miner node
 type StorageMiner interface {
 	Common

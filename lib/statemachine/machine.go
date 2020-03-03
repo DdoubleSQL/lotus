@@ -47,6 +47,7 @@ func (fsm *StateMachine) run() {
 		//  code must send a 'restart' event
 		select {
 		case evt := <-fsm.eventsIn:
+			// 当其收到事件，将进行扇区密封任务操作。
 			pendingEvents = append(pendingEvents, evt)
 		case <-fsm.stageDone:
 			if len(pendingEvents) == 0 {
