@@ -23,6 +23,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"github.com/whyrusleeping/pubsub"
+	"go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
@@ -38,6 +39,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/sigs"
+	"github.com/filecoin-project/lotus/metrics"
 )
 
 var log = logging.Logger("chain")
@@ -479,11 +481,11 @@ func (syncer *Syncer) minerIsValid(ctx context.Context, maddr address.Address, b
 		return xerrors.Errorf("checking if block miner is valid failed: %w", err)
 	}
 
-	if ret.ExitCode != 0 {
-		return xerrors.Errorf("StorageMarket.IsValidMiner check failed (exit code %d)", ret.ExitCode)
+	if ret.MsgRct.ExitCode != 0 {
+		return xerrors.Errorf("StorageMarket.IsValidMiner check failed (exit code %d)", ret.MsgRct.ExitCode)
 	}
 
-	if !bytes.Equal(ret.Return, cbg.CborBoolTrue) {
+	if !bytes.Equal(ret.MsgRct.Return, cbg.CborBoolTrue) {
 		return xerrors.New("miner isn't valid")
 	}
 
@@ -1038,6 +1040,7 @@ func (syncer *Syncer) syncMessagesAndCheckState(ctx context.Context, headers []*
 			return xerrors.Errorf("message processing failed: %w", err)
 		}
 
+		stats.Record(ctx, metrics.ChainNodeWorkerHeight.M(int64(fts.TipSet().Height())))
 		ss.SetHeight(fts.TipSet().Height())
 
 		return nil
