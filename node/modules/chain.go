@@ -76,6 +76,7 @@ func ChainBlockservice(bs dtypes.ChainBlockstore, rem dtypes.ChainExchange) dtyp
 func ChainStore(lc fx.Lifecycle, bs dtypes.ChainBlockstore, ds dtypes.MetadataDS, syscalls *types.VMSyscalls) *store.ChainStore {
 	chain := store.NewChainStore(bs, ds, syscalls)
 
+	// 从磁盘上加载链的状态
 	if err := chain.Load(); err != nil {
 		log.Warnf("loading chain state from disk: %s", err)
 	}

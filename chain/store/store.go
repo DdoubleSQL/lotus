@@ -237,12 +237,14 @@ func (cs *ChainStore) PutTipSet(ctx context.Context, ts *types.TipSet) error {
 	}
 	log.Debugf("expanded %s into %s\n", ts.Cids(), expanded.Cids())
 
+	// 是不是新块？？不对！是不是当前产生的(ing)tipsets中最大权重块要更新
 	if err := cs.MaybeTakeHeavierTipSet(ctx, expanded); err != nil {
 		return xerrors.Errorf("MaybeTakeHeavierTipSet failed in PutTipSet: %w", err)
 	}
 	return nil
 }
 
+// 或许产生了新的权重块，检查下
 func (cs *ChainStore) MaybeTakeHeavierTipSet(ctx context.Context, ts *types.TipSet) error {
 	cs.heaviestLk.Lock()
 	defer cs.heaviestLk.Unlock()
@@ -258,17 +260,22 @@ func (cs *ChainStore) MaybeTakeHeavierTipSet(ctx context.Context, ts *types.TipS
 	if w.GreaterThan(heaviestW) {
 		// TODO: don't do this for initial sync. Now that we don't have a
 		// difference between 'bootstrap sync' and 'caught up' sync, we need
-		// some other heuristic.
+		// some other heuristic（启动法）.
+		// 是新块
 		return cs.takeHeaviestTipSet(ctx, ts)
 	}
 	return nil
 }
 
+// 这个结构体的存在意义是什么
+// chain/store/store.go:309
+// takeHeaviestTipSet
 type reorg struct {
 	old *types.TipSet
 	new *types.TipSet
 }
 
+// reorgCh的初始化
 func (cs *ChainStore) reorgWorker(ctx context.Context) chan<- reorg {
 	out := make(chan reorg, 32)
 	go func() {
@@ -310,6 +317,7 @@ func (cs *ChainStore) takeHeaviestTipSet(ctx context.Context, ts *types.TipSet) 
 		if len(cs.reorgCh) > 0 {
 			log.Warnf("Reorg channel running behind, %d reorgs buffered", len(cs.reorgCh))
 		}
+		// 当前生产新tipset需要调整，发消息给reorg
 		cs.reorgCh <- reorg{
 			old: cs.heaviest,
 			new: ts,
@@ -333,12 +341,14 @@ func (cs *ChainStore) takeHeaviestTipSet(ctx context.Context, ts *types.TipSet) 
 
 // SetHead sets the chainstores current 'best' head node.
 // This should only be called if something is broken and needs fixing
+// 这个有意思。。启动设置链的最新状态（全局全网）
 func (cs *ChainStore) SetHead(ts *types.TipSet) error {
 	cs.heaviestLk.Lock()
 	defer cs.heaviestLk.Unlock()
 	return cs.takeHeaviestTipSet(context.TODO(), ts)
 }
 
+// 是不是DHT的一部分啊？？
 func (cs *ChainStore) Contains(ts *types.TipSet) (bool, error) {
 	for _, c := range ts.Cids() {
 		has, err := cs.bs.Has(c)
@@ -451,6 +461,9 @@ func (cs *ChainStore) GetHeaviestTipSet() *types.TipSet {
 	return cs.heaviest
 }
 
+// 新的区块加入当前tipsets,5
+// 单节点记录，在内存中记录，相当于内存的缓存
+// 转看本文件的AddBlock方法，类似的功能，只是目的不同
 func (cs *ChainStore) AddToTipSetTracker(b *types.BlockHeader) error {
 	cs.tstLk.Lock()
 	defer cs.tstLk.Unlock()
@@ -470,6 +483,7 @@ func (cs *ChainStore) AddToTipSetTracker(b *types.BlockHeader) error {
 	return nil
 }
 
+// 批量存储区块
 func (cs *ChainStore) PersistBlockHeaders(b ...*types.BlockHeader) error {
 	sbs := make([]block.Block, len(b))
 
@@ -502,7 +516,8 @@ type storable interface {
 	ToStorageBlock() (block.Block, error)
 }
 
-// 添加消息
+// 参与全链的记账
+// 添加消息/交易。也就是打包前，生产新的区块，
 // （出块）区块头、链的交易和签名交易等等消息
 // 用于链的存储和同步
 func PutMessage(bs bstore.Blockstore, m storable) (cid.Cid, error) {
@@ -562,6 +577,9 @@ func (cs *ChainStore) expandTipset(b *types.BlockHeader) (*types.TipSet, error) 
 	return types.NewTipSet(all)
 }
 
+// 新的区块加入
+// 1. 修改当前的tipset内容规模
+// 2. 修改权重，主要是reorg
 func (cs *ChainStore) AddBlock(ctx context.Context, b *types.BlockHeader) error {
 	if err := cs.PersistBlockHeaders(b); err != nil {
 		return err
@@ -598,15 +616,20 @@ func (cs *ChainStore) GetGenesis() (*types.BlockHeader, error) {
 	return types.DecodeBlock(genb.RawData())
 }
 
+// 查签了名的消息交易等
 func (cs *ChainStore) GetCMessage(c cid.Cid) (ChainMsg, error) {
+	// 查消息
 	m, err := cs.GetMessage(c)
+	// 查到了
 	if err == nil {
 		return m, nil
 	}
+	// 未知异常？？？？
 	if err != bstore.ErrNotFound {
 		log.Warn("GetCMessage: unexpected error getting unsigned message: %s", err)
 	}
 
+	// 消息签名
 	return cs.GetSignedMessage(c)
 }
 
@@ -630,6 +653,25 @@ func (cs *ChainStore) GetSignedMessage(c cid.Cid) (*types.SignedMessage, error) 
 	return types.DecodeSignedMessage(sb.RawData())
 }
 
+// Array Mapped Trie
+//
+// 牛逼了？？发现了DTH？？？
+//
+// [3 Trie树](https://blog.csdn.net/wydyd110/article/details/82225499#3%20Trie树)
+// [Hash array mapped trie（HAMT） HASH算法](https://blog.csdn.net/HiZhanYue/article/details/86293703)
+//  
+// Trie树，即字典树，又称单词查找树或键树，是一种树形结构，是一种哈希树的变种。典型应用是用于统计和排序大量的字符串
+// （但不仅限于字符串），所以经常被搜索引擎系统用于文本词频统计。它的优点是：最大限度地减少无谓的字符串比较，查询效率
+//  比哈希表高。
+//
+//	Trie的核心思想是空间换时间。利用字符串的公共前缀来降低查询时间的开销以达到提高效率的目的。 
+//
+//	HAMT实现了几乎类似哈希表的速度，同时更经济地使用内存。此外，哈希表可能必须定期调整大小，这是一项昂贵的操作，而
+//	HAMT则会动态增长。通常，HAMT性能通过具有N个时隙的多个的较大根表来改善; 一些HAMT变体允许根部懒惰地生长，对性能
+//	的影响可以忽略不计。
+//
+//  @param root cid.Cid
+//  @return []cid.Cid
 func (cs *ChainStore) readAMTCids(root cid.Cid) ([]cid.Cid, error) {
 	bs := amt.WrapBlockstore(cs.bs)
 	a, err := amt.LoadAMT(bs, root)
