@@ -42,6 +42,9 @@ var log = logging.Logger("chainstore")
 
 var chainHeadKey = dstore.NewKey("head")
 
+// 封装了对链的访问接口
+// 如何构建一个协议里面的链？
+// 构建block、tipsets、chain
 type ChainStore struct {
 	bs bstore.Blockstore
 	ds dstore.Datastore
@@ -499,6 +502,9 @@ type storable interface {
 	ToStorageBlock() (block.Block, error)
 }
 
+// 添加消息
+// （出块）区块头、链的交易和签名交易等等消息
+// 用于链的存储和同步
 func PutMessage(bs bstore.Blockstore, m storable) (cid.Cid, error) {
 	b, err := m.ToStorageBlock()
 	if err != nil {

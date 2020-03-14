@@ -43,6 +43,9 @@ func NewMiner(api api.FullNode, epp gen.ElectionPoStProver) *Miner {
 	}
 }
 
+/**
+	BlockMiner？？？？
+ */
 type Miner struct {
 	api api.FullNode
 

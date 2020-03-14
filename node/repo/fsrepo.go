@@ -33,6 +33,7 @@ const (
 	fsKeystore  = "keystore"
 )
 
+// golang的枚举类型哈哈
 type RepoType int
 
 const (
@@ -176,7 +177,7 @@ func (fsr *FsRepo) APIEndpoint() (multiaddr.Multiaddr, error) {
 }
 
 func (fsr *FsRepo) APIToken() ([]byte, error) {
-	p := filepath.Join(fsr.path, fsAPIToken)
+	 p := filepath.Join(fsr.path, fsAPIToken)
 	f, err := os.Open(p)
 
 	if os.IsNotExist(err) {
@@ -257,7 +258,7 @@ func (fsr *fsLockedRepo) Datastore(ns string) (datastore.Batching, error) {
 	fsr.dsOnce.Do(func() {
 		opts := badger.DefaultOptions
 		opts.Truncate = true
-
+		// 创建datastore
 		fsr.ds, fsr.dsErr = badger.NewDatastore(fsr.join(fsDatastore), &opts)
 		/*if fsr.dsErr == nil {
 			fsr.ds = datastore.NewLogDatastore(fsr.ds, "fsrepo")
@@ -266,6 +267,7 @@ func (fsr *fsLockedRepo) Datastore(ns string) (datastore.Batching, error) {
 	if fsr.dsErr != nil {
 		return nil, fsr.dsErr
 	}
+	// 包装
 	return namespace.Wrap(fsr.ds, datastore.NewKey(ns)), nil
 }
 

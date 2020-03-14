@@ -19,6 +19,15 @@ import (
 	"github.com/filecoin-project/lotus/peermgr"
 )
 
+
+/**
+ hello握手协议
+
+协议名称： /fil/hello/1.0.0
+目的：
+本节点上线，向其他节点发起hello握手请求，进而进行区块同步。
+响应其他新上线的节点hello握手请求，触发其进行区块同步。
+ */
 const ProtocolID = "/fil/hello/1.0.0"
 
 var log = logging.Logger("hello")

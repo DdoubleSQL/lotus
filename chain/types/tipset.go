@@ -13,6 +13,10 @@ import (
 	"golang.org/x/xerrors"
 )
 
+
+// [官方|细谈Filecoin区块架构 —— Tipsets](https://filecoin.io/zh-cn/blog/tipsets-family-based-approach-to-consensus/)
+// [知乎|技术揭秘丨Filecoin的区块架构 - Tipsets](https://zhuanlan.zhihu.com/p/106898914)
+
 var log = logging.Logger("types")
 
 type TipSet struct {

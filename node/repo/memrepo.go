@@ -70,6 +70,7 @@ func NewMemory(opts *MemRepoOptions) *MemRepo {
 		opts.ConfigF = defConfForType
 	}
 	if opts.Ds == nil {
+		// 加上互斥锁的datastore
 		opts.Ds = dssync.MutexWrap(datastore.NewMapDatastore())
 	}
 	if opts.KeyStore == nil {

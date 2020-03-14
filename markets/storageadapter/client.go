@@ -111,6 +111,7 @@ func (n *ClientNodeAdapter) MostRecentStateId(ctx context.Context) (storagemarke
 	return n.ChainHead(ctx)
 }
 
+// 有client_storagemarket的AddPaymentEscrow(escrow第三方保管)调用，存储抵押
 // Adds funds with the StorageMinerActor for a storage participant.  Used by both providers and clients.
 func (n *ClientNodeAdapter) AddFunds(ctx context.Context, addr address.Address, amount tokenamount.TokenAmount) error {
 	// (Provider Node API)
@@ -151,21 +152,26 @@ func (n *ClientNodeAdapter) GetBalance(ctx context.Context, addr address.Address
 	return utils.ToSharedBalance(bal), nil
 }
 
+// 验证入参的交易已经上链，引用同一个客户端交易返回交易的id在没有错误的情况下
 // ValidatePublishedDeal validates that the provided deal has appeared on chain and references the same ClientDeal
 // returns the Deal id if there is no error
 func (c *ClientNodeAdapter) ValidatePublishedDeal(ctx context.Context, deal storagemarket.ClientDeal) (uint64, error) {
-	log.Infow("DEAL ACCEPTED!")
+	log.Infow("DEAL ACCEPTED!") // 交易接受
 
+	// 根据消息的ids去链上取消息
 	pubmsg, err := c.cs.GetMessage(*deal.PublishMessage)
 	if err != nil {
 		return 0, xerrors.Errorf("getting deal pubsish message: %w", err)
 	}
 
+	// 取出矿工
 	pw, err := stmgr.GetMinerWorker(ctx, c.sm, nil, deal.Proposal.Provider)
 	if err != nil {
 		return 0, xerrors.Errorf("getting miner worker failed: %w", err)
 	}
 
+	// 消息检查
+	// 不是存储提供商发布的、不是存储市场的消息、掉错了存储市场的方法
 	if pubmsg.From != pw {
 		return 0, xerrors.Errorf("deal wasn't published by storage provider: from=%s, provider=%s", pubmsg.From, deal.Proposal.Provider)
 	}
@@ -178,11 +184,13 @@ func (c *ClientNodeAdapter) ValidatePublishedDeal(ctx context.Context, deal stor
 		return 0, xerrors.Errorf("deal publish message called incorrect method (method=%s)", pubmsg.Method)
 	}
 
+	// 解码存储交易的参数，比较校验，链上sd？链下deal？
 	var params actors.PublishStorageDealsParams
 	if err := params.UnmarshalCBOR(bytes.NewReader(pubmsg.Params)); err != nil {
 		return 0, err
 	}
 
+	// 校验逻辑
 	dealIdx := -1
 	for i, storageDeal := range params.Deals {
 		// TODO: make it less hacky
@@ -201,6 +209,7 @@ func (c *ClientNodeAdapter) ValidatePublishedDeal(ctx context.Context, deal stor
 		return 0, xerrors.Errorf("deal publish didn't contain our deal (message cid: %s)", deal.PublishMessage)
 	}
 
+	// 很像两阶段 提交，，具体代码和go-filecoin的存储过程相近，等待链上的消息
 	// TODO: timeout
 	_, ret, err := c.sm.WaitForMessage(ctx, *deal.PublishMessage)
 	if err != nil {
@@ -215,6 +224,7 @@ func (c *ClientNodeAdapter) ValidatePublishedDeal(ctx context.Context, deal stor
 		return 0, err
 	}
 
+	// 返回相等的交易id，dealIdx有上面的那个校验逻辑得出
 	return res.DealIDs[dealIdx], nil
 }
 

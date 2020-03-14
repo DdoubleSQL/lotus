@@ -59,6 +59,7 @@ type BlockHeader struct {
 	ForkSignaling uint64 // 12
 }
 
+// 区块头转存储块
 func (b *BlockHeader) ToStorageBlock() (block.Block, error) {
 	data, err := b.Serialize()
 	if err != nil {

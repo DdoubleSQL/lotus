@@ -25,6 +25,9 @@ import (
 
 var log = logging.Logger("storageminer")
 
+/*
+	StorageMiner???
+ */
 type Miner struct {
 	api   storageMinerApi
 	h     host.Host

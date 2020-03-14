@@ -32,6 +32,10 @@ func (t *SealSeed) Equals(o *SealSeed) bool {
 	return string(t.TicketBytes) == string(o.TicketBytes) && t.BlockHeight == o.BlockHeight
 }
 
+// Pieces
+
+// 数据单元，是 Filecoin 网络中最小存储单位，每个 Pieces 大小为 512KB，
+// Filecoin 会把大文件拆分成很多个 Pieces, 交给不同的矿工存储。
 type Piece struct {
 	DealID uint64
 
@@ -55,6 +59,10 @@ type Log struct {
 	Kind string
 }
 
+//  Sectors
+//
+// 扇区，矿工提供存储空间的最小单元，也就是说在我们创建矿工的时候抵押
+// 存储空间大小必须是 Sector 的整数倍。目前测试网络一个 Sector 的大小是 32GB。
 type SectorInfo struct {
 	State    api.SectorState
 	SectorID uint64

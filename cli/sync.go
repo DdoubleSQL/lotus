@@ -13,6 +13,7 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 )
 
+// 检查 交互 链同步器
 var syncCmd = &cli.Command{
 	Name:  "sync",
 	Usage: "Inspect or interact with the chain syncer",

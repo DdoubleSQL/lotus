@@ -170,6 +170,7 @@ func (n *ProviderNodeAdapter) MostRecentStateId(ctx context.Context) (storagemar
 	return n.ChainHead(ctx)
 }
 
+// 存储担保资金
 // Adds funds with the StorageMinerActor for a storage participant.  Used by both providers and clients.
 func (n *ProviderNodeAdapter) AddFunds(ctx context.Context, addr address.Address, amount tokenamount.TokenAmount) error {
 	// (Provider Node API)
