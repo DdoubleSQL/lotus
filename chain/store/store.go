@@ -426,6 +426,9 @@ func (cs *ChainStore) NearestCommonAncestor(a, b *types.TipSet) (*types.TipSet, 
 	return cs.LoadTipSet(l[len(l)-1].Parents())
 }
 
+// 将入参的两个链ts调整至同高度，返回中间的调整过程
+// 左ts比较新，迭代取左ts的父亲们，并这些爸爸放到同一个列表
+// 同理右ts
 func (cs *ChainStore) ReorgOps(a, b *types.TipSet) ([]*types.TipSet, []*types.TipSet, error) {
 	left := a
 	right := b
@@ -805,6 +808,7 @@ func (cs *ChainStore) readMsgMetaCids(mmc cid.Cid) ([]cid.Cid, []cid.Cid, error)
 	return blscids, secpkcids, nil
 }
 
+// TODO 暂时还没有看明白这个函数的使用目的
 func (cs *ChainStore) GetPath(ctx context.Context, from types.TipSetKey, to types.TipSetKey) ([]*HeadChange, error) {
 	fts, err := cs.LoadTipSet(from)
 	if err != nil {
@@ -814,6 +818,9 @@ func (cs *ChainStore) GetPath(ctx context.Context, from types.TipSetKey, to type
 	if err != nil {
 		return nil, xerrors.Errorf("loading to tipset %s: %w", to, err)
 	}
+	// 如果fts区块高度大与rts，说明做的结算回滚！！应该是这样的
+	// 如果是fts比rts低，说明做的结算时apply！！
+
 	revert, apply, err := cs.ReorgOps(fts, tts)
 	if err != nil {
 		return nil, xerrors.Errorf("error getting tipset branches: %w", err)
@@ -848,7 +855,7 @@ func (cs *ChainStore) MessagesForBlock(b *types.BlockHeader) ([]*types.Message, 
 
 	return blsmsgs, secpkmsgs, nil
 }
-
+// 一个区块的父亲交易收据获取
 func (cs *ChainStore) GetParentReceipt(b *types.BlockHeader, i int) (*types.MessageReceipt, error) {
 	bs := amt.WrapBlockstore(cs.bs)
 	a, err := amt.LoadAMT(bs, b.ParentMessageReceipts)
@@ -864,6 +871,7 @@ func (cs *ChainStore) GetParentReceipt(b *types.BlockHeader, i int) (*types.Mess
 	return &r, nil
 }
 
+// 抽出cids对应的交易消息
 func (cs *ChainStore) LoadMessagesFromCids(cids []cid.Cid) ([]*types.Message, error) {
 	msgs := make([]*types.Message, 0, len(cids))
 	for i, c := range cids {
@@ -878,6 +886,7 @@ func (cs *ChainStore) LoadMessagesFromCids(cids []cid.Cid) ([]*types.Message, er
 	return msgs, nil
 }
 
+// 抽出cids对应的交易消息
 func (cs *ChainStore) LoadSignedMessagesFromCids(cids []cid.Cid) ([]*types.SignedMessage, error) {
 	msgs := make([]*types.SignedMessage, 0, len(cids))
 	for i, c := range cids {
@@ -900,6 +909,7 @@ func (cs *ChainStore) VMSys() *types.VMSyscalls {
 	return cs.vmcalls
 }
 
+// FullTipSet
 func (cs *ChainStore) TryFillTipSet(ts *types.TipSet) (*FullTipSet, error) {
 	var out []*types.FullBlock
 
@@ -966,6 +976,7 @@ func (cs *ChainStore) GetRandomness(ctx context.Context, blks []cid.Cid, round i
 	}
 }
 
+// 查找高度h的ts，且满足高度h对应的ts在给定的ts之前
 func (cs *ChainStore) GetTipsetByHeight(ctx context.Context, h uint64, ts *types.TipSet) (*types.TipSet, error) {
 	if ts == nil {
 		ts = cs.GetHeaviestTipSet()
@@ -1016,6 +1027,7 @@ func recurseLinks(bs blockstore.Blockstore, root cid.Cid, in []cid.Cid) ([]cid.C
 	return in, nil
 }
 
+// 写入文件
 func (cs *ChainStore) Export(ctx context.Context, ts *types.TipSet, w io.Writer) error {
 	if ts == nil {
 		ts = cs.GetHeaviestTipSet()
@@ -1057,6 +1069,7 @@ func (cs *ChainStore) Export(ctx context.Context, ts *types.TipSet, w io.Writer)
 	})
 }
 
+// 从文件导入
 func (cs *ChainStore) Import(r io.Reader) (*types.TipSet, error) {
 	header, err := car.LoadCar(cs.Blockstore(), r)
 	if err != nil {
