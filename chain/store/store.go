@@ -698,6 +698,8 @@ type ChainMsg interface {
 	ToStorageBlock() (block.Block, error)
 }
 
+// xxxx的交易 in the given ts
+// 消息的费用结算
 func (cs *ChainStore) MessagesForTipset(ts *types.TipSet) ([]ChainMsg, error) {
 	applied := make(map[address.Address]uint64)
 	balances := make(map[address.Address]types.BigInt)
@@ -708,6 +710,8 @@ func (cs *ChainStore) MessagesForTipset(ts *types.TipSet) ([]ChainMsg, error) {
 		return nil, xerrors.Errorf("failed to load state tree")
 	}
 
+	// a是消息的发送发地址
+	// 记录下该地址的余额 map[Nonce]Balance
 	preloadAddr := func(a address.Address) error {
 		if _, ok := applied[a]; !ok {
 			act, err := st.GetActor(a)
@@ -738,20 +742,25 @@ func (cs *ChainStore) MessagesForTipset(ts *types.TipSet) ([]ChainMsg, error) {
 
 		for _, cm := range cmsgs {
 			m := cm.VMMessage()
+			// 加载出消息发送方的账户余额信息
 			if err := preloadAddr(m.From); err != nil {
 				return nil, err
 			}
 
+			// 发送序列的检查是否一致
 			if applied[m.From] != m.Nonce {
 				continue
 			}
 			applied[m.From]++
 
+			// 检查消息发送者的钱够不够
 			if balances[m.From].LessThan(m.RequiredFunds()) {
 				continue
 			}
+			// 大数减法，资金扣除
 			balances[m.From] = types.BigSub(balances[m.From], m.RequiredFunds())
 
+			// 输出
 			out = append(out, cm)
 		}
 	}
@@ -771,6 +780,7 @@ func (cs *ChainStore) readMsgMetaCids(mmc cid.Cid) ([]cid.Cid, []cid.Cid, error)
 		return mmcids.bls, mmcids.secpk, nil
 	}
 
+	// 从blockstore中取出chain statetree
 	cst := hamt.CSTFromBstore(cs.bs)
 	var msgmeta types.MsgMeta
 	if err := cst.Get(context.TODO(), mmc, &msgmeta); err != nil {
@@ -819,6 +829,7 @@ func (cs *ChainStore) GetPath(ctx context.Context, from types.TipSetKey, to type
 	return path, nil
 }
 
+// 从一个区块中取出里面的交易消息
 func (cs *ChainStore) MessagesForBlock(b *types.BlockHeader) ([]*types.Message, []*types.SignedMessage, error) {
 	blscids, secpkcids, err := cs.readMsgMetaCids(b.Messages)
 	if err != nil {

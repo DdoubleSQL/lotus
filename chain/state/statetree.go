@@ -191,6 +191,7 @@ func (st *StateTree) Revert() error {
 	return nil
 }
 
+// mutate 突变转变
 func (st *StateTree) MutateActor(addr address.Address, f func(*types.Actor) error) error {
 	act, err := st.GetActor(addr)
 	if err != nil {
