@@ -943,6 +943,8 @@ func drawRandomness(t *types.Ticket, round int64) []byte {
 	return h.Sum(nil)
 }
 
+// @param blks 同一个ts里面的所有区块
+// @param round 随机数和ts的高度相关
 func (cs *ChainStore) GetRandomness(ctx context.Context, blks []cid.Cid, round int64) ([]byte, error) {
 	_, span := trace.StartSpan(ctx, "store.GetRandomness")
 	defer span.End()

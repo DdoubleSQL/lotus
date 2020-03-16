@@ -29,6 +29,7 @@ type StateManager struct {
 	cs *store.ChainStore
 
 	stCache  map[string][]cid.Cid
+	// computeWait 看样子是个耗时的计算
 	compWait map[string]chan struct{}
 	stlk     sync.Mutex
 	newVM    func(cid.Cid, uint64, vm.Rand, address.Address, blockstore.Blockstore, *types.VMSyscalls) (*vm.VM, error)
@@ -51,6 +52,11 @@ func cidsToKey(cids []cid.Cid) string {
 	return out
 }
 
+// 结算、存储、开启下一轮的区块开采
+// @param ts 给定一个ts
+// @return st stateroot
+// @return rec receipt
+// @return err
 func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st cid.Cid, rec cid.Cid, err error) {
 	ctx, span := trace.StartSpan(ctx, "tipSetState")
 	defer span.End()
@@ -60,14 +66,18 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 
 	ck := cidsToKey(ts.Cids())
 	sm.stlk.Lock()
+	// 该ts是否在计算中
 	cw, cwok := sm.compWait[ck]
+	// 在计算
 	if cwok {
+		// 开放compWait的读权限
 		sm.stlk.Unlock()
 		span.AddAttributes(trace.BoolAttribute("waited", true))
 		select {
-		case <-cw:
+		case <-cw: // 当close(ch)会触发这个分支
+			// 禁止读
 			sm.stlk.Lock()
-		case <-ctx.Done():
+		case <-ctx.Done(): // 已经closed，nil
 			return cid.Undef, cid.Undef, ctx.Err()
 		}
 	}
@@ -80,6 +90,7 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 	ch := make(chan struct{})
 	sm.compWait[ck] = ch
 
+	// tsState的异步缓存更新
 	defer func() {
 		sm.stlk.Lock()
 		delete(sm.compWait, ck)
@@ -100,6 +111,7 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 		return ts.Blocks()[0].ParentStateRoot, ts.Blocks()[0].ParentMessageReceipts, nil
 	}
 
+	// tsState的同步获取
 	st, rec, err = sm.computeTipSetState(ctx, ts.Blocks(), nil)
 	if err != nil {
 		return cid.Undef, cid.Undef, err
@@ -108,6 +120,11 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 	return st, rec, nil
 }
 
+// 网络出块，做结算，存储，以及开启下一轮的区块
+// @param blks 同一个ts中的blks
+// @param cb 回调函数
+// @return stateroot
+// @return receiptroot
 func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.BlockHeader, cb func(cid.Cid, *types.Message, *vm.ApplyRet) error) (cid.Cid, cid.Cid, error) {
 	ctx, span := trace.StartSpan(ctx, "computeTipSetState")
 	defer span.End()
@@ -129,6 +146,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.Bl
 			return cid.Undef, cid.Undef, xerrors.Errorf("getting parent block: %w", err)
 		}
 
+		// 处理分叉 bug fix
 		pstate, err = sm.handleStateForks(ctx, blks[0].ParentStateRoot, blks[0].Height, parent.Height)
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("error handling state forks: %w", err)
@@ -153,12 +171,14 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.Bl
 	}
 	reward := vm.MiningReward(netact.Balance)
 	for tsi, b := range blks {
+		// 取出网络
 		netact, err = vmi.StateTree().GetActor(actors.NetworkAddress)
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("failed to get network actor: %w", err)
 		}
 		vmi.SetBlockMiner(b.Miner)
 
+		// 取出矿工的拥有者
 		owner, err := GetMinerOwner(ctx, sm, pstate, b.Miner)
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("failed to get owner for miner %s: %w", b.Miner, err)
@@ -169,6 +189,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.Bl
 			return cid.Undef, cid.Undef, xerrors.Errorf("failed to get miner owner actor")
 		}
 
+		// 区块奖励发放，网络给矿工发奖励
 		if err := vm.Transfer(netact, act, reward); err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("failed to deduct funds from network actor: %w", err)
 		}
@@ -258,6 +279,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.Bl
 	}
 
 	// TODO: this nonce-getting is a tiny bit ugly
+	// 下一轮Epoch开始
 	ca, err := vmi.StateTree().GetActor(actors.CronAddress)
 	if err != nil {
 		return cid.Undef, cid.Undef, err
@@ -280,6 +302,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.Bl
 		return cid.Undef, cid.Undef, xerrors.Errorf("CheckProofSubmissions exit was non-zero: %d", ret.ExitCode)
 	}
 
+	// 区块打包
 	bs := amt.WrapBlockstore(sm.cs.Blockstore())
 	rectroot, err := amt.FromArray(bs, receipts)
 	if err != nil {
@@ -294,6 +317,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.Bl
 	return st, rectroot, nil
 }
 
+// 从指定ts的statetree中取出指定地址的actor
 func (sm *StateManager) GetActor(addr address.Address, ts *types.TipSet) (*types.Actor, error) {
 	if ts == nil {
 		ts = sm.cs.GetHeaviestTipSet()
@@ -310,6 +334,7 @@ func (sm *StateManager) GetActor(addr address.Address, ts *types.TipSet) (*types
 	return state.GetActor(addr)
 }
 
+// 查看指定ts中指定地址的账户余额
 func (sm *StateManager) GetBalance(addr address.Address, ts *types.TipSet) (types.BigInt, error) {
 	act, err := sm.GetActor(addr, ts)
 	if err != nil {
@@ -326,6 +351,7 @@ func (sm *StateManager) ChainStore() *store.ChainStore {
 	return sm.cs
 }
 
+// 从存储中取出指定地址和ts的st
 func (sm *StateManager) LoadActorState(ctx context.Context, a address.Address, out interface{}, ts *types.TipSet) (*types.Actor, error) {
 	act, err := sm.GetActor(a, ts)
 	if err != nil {
@@ -339,6 +365,8 @@ func (sm *StateManager) LoadActorState(ctx context.Context, a address.Address, o
 
 	return act, nil
 }
+
+// 取指定ts和地址的公钥地址
 func (sm *StateManager) ResolveToKeyAddress(ctx context.Context, addr address.Address, ts *types.TipSet) (address.Address, error) {
 	switch addr.Protocol() {
 	case address.BLS, address.SECP256K1:
@@ -366,6 +394,7 @@ func (sm *StateManager) ResolveToKeyAddress(ctx context.Context, addr address.Ad
 	return vm.ResolveToKeyAddr(tree, cst, addr)
 }
 
+// 取指定ts和地址的公钥内容
 func (sm *StateManager) GetBlsPublicKey(ctx context.Context, addr address.Address, ts *types.TipSet) (pubk bls.PublicKey, err error) {
 	kaddr, err := sm.ResolveToKeyAddress(ctx, addr, ts)
 	if err != nil {
@@ -412,6 +441,7 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid) (*type
 		return nil, nil, fmt.Errorf("failed to load message: %w", err)
 	}
 
+	// 订阅链的最新状态变更消息
 	tsub := sm.cs.SubHeadChanges(ctx)
 
 	head, ok := <-tsub
@@ -419,6 +449,7 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid) (*type
 		return nil, nil, fmt.Errorf("SubHeadChanges stream was invalid")
 	}
 
+	// 订阅成功，会持有一个当前仅含链的最新ts
 	if len(head) != 1 {
 		return nil, nil, fmt.Errorf("SubHeadChanges first entry should have been one item")
 	}
@@ -436,6 +467,8 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid) (*type
 		return head[0].Val, r, nil
 	}
 
+	// 回溯链，找到msg所在的ts, 收据
+	// 异步查找
 	var backTs *types.TipSet
 	var backRcp *types.MessageReceipt
 	backSearchWait := make(chan struct{})
@@ -482,6 +515,7 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid) (*type
 	}
 }
 
+// 从入参ts往前查找m的收据
 func (sm *StateManager) searchBackForMsg(ctx context.Context, from *types.TipSet, m store.ChainMsg) (*types.TipSet, *types.MessageReceipt, error) {
 
 	cur := from
@@ -513,6 +547,7 @@ func (sm *StateManager) searchBackForMsg(ctx context.Context, from *types.TipSet
 			return nil, nil, fmt.Errorf("failed to load tipset during msg wait searchback: %w", err)
 		}
 
+		// 回放检查消息的执行
 		r, err := sm.tipsetExecutedMessage(ts, m.Cid(), m.VMMessage())
 		if err != nil {
 			return nil, nil, fmt.Errorf("checking for message execution during lookback: %w", err)
@@ -566,6 +601,7 @@ func (sm *StateManager) tipsetExecutedMessage(ts *types.TipSet, msg cid.Cid, vmm
 	return nil, nil
 }
 
+// ts -> state tree -> addresses
 func (sm *StateManager) ListAllActors(ctx context.Context, ts *types.TipSet) ([]address.Address, error) {
 	if ts == nil {
 		ts = sm.cs.GetHeaviestTipSet()
@@ -575,6 +611,7 @@ func (sm *StateManager) ListAllActors(ctx context.Context, ts *types.TipSet) ([]
 		return nil, err
 	}
 
+	// chain state tree
 	cst := hamt.CSTFromBstore(sm.cs.Blockstore())
 	r, err := hamt.LoadNode(ctx, cst, st)
 	if err != nil {
@@ -597,6 +634,7 @@ func (sm *StateManager) ListAllActors(ctx context.Context, ts *types.TipSet) ([]
 	return out, nil
 }
 
+// 存储参与者余额
 func (sm *StateManager) MarketBalance(ctx context.Context, addr address.Address, ts *types.TipSet) (actors.StorageParticipantBalance, error) {
 	var state actors.StorageMarketState
 	if _, err := sm.LoadActorState(ctx, actors.StorageMarketAddress, &state, ts); err != nil {
@@ -624,12 +662,14 @@ func (sm *StateManager) ValidateChain(ctx context.Context, ts *types.TipSet) err
 	}
 
 	lastState := tschain[len(tschain)-1].ParentState()
+	// 从后向前更新？？？
 	for i := len(tschain) - 1; i >= 0; i-- {
 		cur := tschain[i]
 		log.Infof("computing state (height: %d, ts=%s)", cur.Height(), cur.Cids())
 		if cur.ParentState() != lastState {
 			return xerrors.Errorf("tipset chain had state mismatch at height %d", cur.Height())
 		}
+		// 链状态的更新
 		st, _, err := sm.TipSetState(ctx, cur)
 		if err != nil {
 			return err
