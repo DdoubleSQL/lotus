@@ -51,6 +51,12 @@ const (
 	localUpdates = "update"
 )
 
+/**
+
+消息池是 Filecoin 区块链系统中的一个子系统。
+消息池充当 Filecoin 节点和用于链外消息传输的对等网络之间的接口。
+节点使用它来维护一组消息以传输到 Filecoin VM（用于"链上"执行）。
+ */
 type MessagePool struct {
 	lk sync.Mutex
 
@@ -89,9 +95,11 @@ func newMsgSet() *msgSet {
 }
 
 func (ms *msgSet) add(m *types.SignedMessage) error {
+	// 保证消息的顺序
 	if len(ms.msgs) == 0 || m.Message.Nonce >= ms.nextNonce {
 		ms.nextNonce = m.Message.Nonce + 1
 	}
+	// 去重
 	if _, has := ms.msgs[m.Message.Nonce]; has {
 		if m.Cid() != ms.msgs[m.Message.Nonce].Cid() {
 			log.Error("Add with duplicate nonce")
@@ -172,6 +180,7 @@ func New(api Provider, ds dtypes.MetadataDS) (*MessagePool, error) {
 
 	go mp.repubLocal()
 
+	// 全链的头部消息订阅callback
 	mp.curTs = api.SubscribeHeadChanges(func(rev, app []*types.TipSet) error {
 		err := mp.HeadChange(rev, app)
 		if err != nil {
@@ -519,6 +528,7 @@ func (mp *MessagePool) Remove(from address.Address, nonce uint64) {
 	}
 }
 
+// 当前ts中待解决的、待消化的msgs和ts
 func (mp *MessagePool) Pending() ([]*types.SignedMessage, *types.TipSet) {
 	mp.curTsLk.Lock()
 	defer mp.curTsLk.Unlock()
@@ -534,6 +544,7 @@ func (mp *MessagePool) Pending() ([]*types.SignedMessage, *types.TipSet) {
 	return out, mp.curTs
 }
 
+// 取出地址下没消费的消息。排序输出
 func (mp *MessagePool) pendingFor(a address.Address) []*types.SignedMessage {
 	mset := mp.pending[a]
 	if mset == nil || len(mset.msgs) == 0 {
@@ -546,6 +557,7 @@ func (mp *MessagePool) pendingFor(a address.Address) []*types.SignedMessage {
 		set = append(set, m)
 	}
 
+	// 升序排序
 	sort.Slice(set, func(i, j int) bool {
 		return set[i].Message.Nonce < set[j].Message.Nonce
 	})
@@ -557,7 +569,15 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 	mp.curTsLk.Lock()
 	defer mp.curTsLk.Unlock()
 
+	/**
+	  {
+	     "address":{
+	         {"seq":[msgs]}
+	     }
+	  }
+	 */
 	rmsgs := make(map[address.Address]map[uint64]*types.SignedMessage)
+	// 添加
 	add := func(m *types.SignedMessage) {
 		s, ok := rmsgs[m.Message.From]
 		if !ok {
@@ -566,6 +586,7 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 		}
 		s[m.Message.Nonce] = m
 	}
+	// 删除
 	rm := func(from address.Address, nonce uint64) {
 		s, ok := rmsgs[from]
 		if !ok {
@@ -581,6 +602,7 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 		mp.Remove(from, nonce)
 	}
 
+	// 回退消息变更
 	for _, ts := range revert {
 		pts, err := mp.api.LoadTipSet(ts.Parents())
 		if err != nil {
@@ -599,6 +621,7 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 		}
 	}
 
+	// 应用接受变更,这里是发送，上面的rm是消费
 	for _, ts := range apply {
 		for _, b := range ts.Blocks() {
 			bmsgs, smsgs, err := mp.api.MessagesForBlock(b)
@@ -617,6 +640,7 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 		mp.curTs = ts
 	}
 
+	// 检查变更成功了吗，并推送消息
 	for _, s := range rmsgs {
 		for _, msg := range s {
 			if err := mp.addSkipChecks(msg); err != nil {
