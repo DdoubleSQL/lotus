@@ -13,7 +13,7 @@ type SignedVoucher struct {
 	TimeLock       uint64
 	SecretPreimage []byte
 	Extra          *ModVerifyParams
-	Lane           uint64
+	Lane           uint64 // lane 小道 车路
 	Nonce          uint64
 	Amount         BigInt
 	MinCloseHeight uint64

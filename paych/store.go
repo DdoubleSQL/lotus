@@ -38,6 +38,9 @@ const (
 	DirOutbound = 2
 )
 
+/*
+ Voucher 票据收据
+ */
 type VoucherInfo struct {
 	Voucher *types.SignedVoucher
 	Proof   []byte

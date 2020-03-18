@@ -27,6 +27,9 @@ const BlockSyncProtocolID = "/fil/sync/blk/0.0.1"
 
 const BlockSyncMaxRequestLength = 800
 
+/*
+ BS的服务端
+ */
 type BlockSyncService struct {
 	cs *store.ChainStore
 }
@@ -87,6 +90,9 @@ func NewBlockSyncService(cs *store.ChainStore) *BlockSyncService {
 	}
 }
 
+// 响应区块同步请求
+// 1. 解析stream -> BSRequest
+// 2. 按照请求拼装响应
 func (bss *BlockSyncService) HandleStream(s inet.Stream) {
 	ctx, span := trace.StartSpan(context.Background(), "blocksync.HandleStream")
 	defer span.End()
@@ -158,6 +164,7 @@ func (bss *BlockSyncService) processRequest(ctx context.Context, p peer.ID, req 
 	}, nil
 }
 
+// tss整理
 func (bss *BlockSyncService) collectChainSegment(start types.TipSetKey, length uint64, opts *BSOptions) ([]*BSTipSet, error) {
 	var bstips []*BSTipSet
 	cur := start
@@ -194,6 +201,7 @@ func (bss *BlockSyncService) collectChainSegment(start types.TipSetKey, length u
 	}
 }
 
+// 交易整理
 func (bss *BlockSyncService) gatherMessages(ts *types.TipSet) ([]*types.Message, [][]uint64, []*types.SignedMessage, [][]uint64, error) {
 	blsmsgmap := make(map[cid.Cid]uint64)
 	secpkmsgmap := make(map[cid.Cid]uint64)

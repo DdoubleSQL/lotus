@@ -26,6 +26,9 @@ import (
 	"github.com/filecoin-project/lotus/peermgr"
 )
 
+/**
+ BS的客户端
+ */
 type BlockSync struct {
 	bserv bserv.BlockService
 	host  host.Host
@@ -60,6 +63,7 @@ func (bs *BlockSync) processStatus(req *BlockSyncRequest, res *BlockSyncResponse
 	}
 }
 
+// 作为客户端去可连接的节点取tss
 func (bs *BlockSync) GetBlocks(ctx context.Context, tsk types.TipSetKey, count int) ([]*types.TipSet, error) {
 	ctx, span := trace.StartSpan(ctx, "bsync.GetBlocks")
 	defer span.End()
@@ -70,12 +74,14 @@ func (bs *BlockSync) GetBlocks(ctx context.Context, tsk types.TipSetKey, count i
 		)
 	}
 
+	// 构建请求
 	req := &BlockSyncRequest{
 		Start:         tsk.Cids(),
 		RequestLength: uint64(count),
 		Options:       BSOptBlocks,
 	}
 
+	// 获取可以提供服务的对端
 	peers := bs.getPeers()
 	// randomize the first few peers so we don't always pick the same peer
 	shufflePrefix(peers)
@@ -92,6 +98,7 @@ func (bs *BlockSync) GetBlocks(ctx context.Context, tsk types.TipSetKey, count i
 		default:
 		}
 
+		// 发送请求
 		res, err := bs.sendRequestToPeer(ctx, p, req)
 		if err != nil {
 			oerr = err
@@ -101,6 +108,7 @@ func (bs *BlockSync) GetBlocks(ctx context.Context, tsk types.TipSetKey, count i
 			continue
 		}
 
+		// 检查请求的状态
 		if res.Status == 0 {
 			resp, err := bs.processBlocksResponse(req, res)
 			if err != nil {
@@ -110,6 +118,7 @@ func (bs *BlockSync) GetBlocks(ctx context.Context, tsk types.TipSetKey, count i
 			bs.host.ConnManager().TagPeer(p, "bsync", 25)
 			return resp, nil
 		}
+		// 异常处理
 		oerr = bs.processStatus(req, res)
 		if oerr != nil {
 			log.Warnf("BlockSync peer %s response was an error: %s", p.String(), oerr)
@@ -276,6 +285,7 @@ func (bs *BlockSync) sendRequestToPeer(ctx context.Context, p peer.ID, req *Bloc
 	return &res, nil
 }
 
+// 拍平结构装换
 func (bs *BlockSync) processBlocksResponse(req *BlockSyncRequest, res *BlockSyncResponse) ([]*types.TipSet, error) {
 	if len(res.Chain) == 0 {
 		return nil, xerrors.Errorf("got no blocks in successful blocksync response")

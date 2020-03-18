@@ -675,6 +675,7 @@ func (mp *MessagePool) MessagesForBlocks(blks []*types.BlockHeader) ([]*types.Si
 	return out, nil
 }
 
+// 从缓存中取出消息的签名
 func (mp *MessagePool) RecoverSig(msg *types.Message) *types.SignedMessage {
 	val, ok := mp.blsSigCache.Get(msg.Cid())
 	if !ok {
