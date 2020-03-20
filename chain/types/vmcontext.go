@@ -12,6 +12,7 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
+// 合约状态存储
 type Storage interface {
 	Put(cbg.CBORMarshaler) (cid.Cid, aerrors.ActorError)
 	Get(cid.Cid, cbg.CBORUnmarshaler) aerrors.ActorError
@@ -31,7 +32,7 @@ type StateTree interface {
 type VMContext interface {
 	Message() *Message
 	Origin() address.Address
-	Ipld() *hamt.CborIpldStore
+	Ipld() *hamt.CborIpldStore // ipfs,存储层接口
 	Send(to address.Address, method uint64, value BigInt, params []byte) ([]byte, aerrors.ActorError)
 	BlockHeight() uint64
 	GasUsed() BigInt
@@ -53,6 +54,22 @@ type PublicSectorInfo struct {
 	CommR    [CommitmentBytesLen]byte
 }
 
+/**
+ Ticket 用于领导选举？
+ Expected Consensus每一轮会生成一个Ticket，
+ 每个节点通过一定的计算，确定是否是该轮的Leader。
+ 如果选为Leader，节点可以打包区块。
+
+ [Filecoin规范②--时空证明](https://juejin.im/post/5e12edf4f265da5d363e308d)
+
+矿工正在存储的无报错扇区的一个子集允许他们使用一个PartialTicket去尝试一次“领导选举”，
+且使用任一个PartialTicket都可导出一个有效的用于“领导选举”的ChallengeTicket。抓取一
+个获胜ChallengeTicket的可能性依赖于扇区大小和总存储量。矿工在每一个指定epoch内获得的
+奖励，与他们生成的获胜ChallengeTickets数量成正比。因此这也激励着矿工们在一个“领导选举”
+内，为了展现他们的完整算力而尽可能多地检查被允许的存储。矿工在一个给定epoch内能产生的“选
+举证明”数量将决定其赚取多少区块奖励。
+
+ */
 type Candidate struct {
 	SectorID             uint64
 	PartialTicket        [32]byte

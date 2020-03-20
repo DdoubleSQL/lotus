@@ -5,7 +5,12 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/aerrors"
 	"github.com/filecoin-project/lotus/chain/types"
 )
+/**
+VM处理需要两个系统actor：
 
+CronActor ：在每一个epoch运行至关重要的函数。
+InitActor：初始化新的actor，记录网络名称
+ */
 type CronActor struct{}
 
 type callTuple struct {

@@ -15,6 +15,11 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+/**
+	创建ACtor个工具类
+    创建Actor并保存状态树
+ */
+
 func init() {
 	bs := bstore.NewBlockstore(dstore.NewMapDatastore())
 	cst := hamt.CSTFromBstore(bs)
@@ -28,6 +33,7 @@ func init() {
 
 var EmptyObjectCid cid.Cid
 
+// 尝试从一个地址创建出Actor，因为这个地址可能不合法
 func TryCreateAccountActor(st *state.StateTree, addr address.Address) (*types.Actor, aerrors.ActorError) {
 	act, err := makeActor(st, addr)
 	if err != nil {

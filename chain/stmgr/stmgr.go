@@ -169,6 +169,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, blks []*types.Bl
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("failed to get network actor: %w", err)
 	}
+	// 应该给与的出块奖励数额
 	reward := vm.MiningReward(netact.Balance)
 	for tsi, b := range blks {
 		// 取出网络

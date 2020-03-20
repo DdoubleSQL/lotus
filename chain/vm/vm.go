@@ -25,6 +25,17 @@ import (
 	"github.com/filecoin-project/lotus/lib/sigs"
 )
 
+
+/**
+    [Filecoin规范③--虚拟机系统](https://juejin.im/post/5e12ee1ce51d4541375f1389)
+
+    什么是地址
+	什么是状态树
+	宏观经济指数
+	系统actor
+	消息actor方法调用
+	解释器
+ */
 var log = logging.Logger("vm")
 
 const (
@@ -140,6 +151,7 @@ func (vmc *VMContext) Origin() address.Address {
 }
 
 // Send allows the current execution context to invoke methods on other actors in the system
+// 让本VM内的其他actor执行，并收费
 func (vmc *VMContext) Send(to address.Address, method uint64, value types.BigInt, params []byte) ([]byte, aerrors.ActorError) {
 	ctx, span := trace.StartSpan(vmc.ctx, "vmc.Send")
 	defer span.End()
@@ -370,6 +382,7 @@ type ApplyRet struct {
 	InternalExecutions []*ExecutionResult
 }
 
+// 交易结算、交易生效
 func (vm *VM) send(ctx context.Context, msg *types.Message, parent *VMContext,
 	gasCharge uint64) ([]byte, aerrors.ActorError, *VMContext) {
 
@@ -405,6 +418,7 @@ func (vm *VM) send(ctx context.Context, msg *types.Message, parent *VMContext,
 		}()
 	}
 
+	//收费结算
 	if types.BigCmp(msg.Value, types.NewInt(0)) != 0 {
 		if aerr := vmctx.ChargeGas(gasFundTransfer); aerr != nil {
 			return nil, aerrors.Wrap(aerr, "sending funds"), nil
@@ -442,6 +456,7 @@ func checkMessage(msg *types.Message) error {
 	return nil
 }
 
+// 生效一条交易，所以具有事务性，使用stree的Snapshot和`revert方法实现的
 func (vm *VM) ApplyMessage(ctx context.Context, msg *types.Message) (*ApplyRet, error) {
 	ctx, span := trace.StartSpan(ctx, "vm.ApplyMessage")
 	defer span.End()
@@ -453,15 +468,18 @@ func (vm *VM) ApplyMessage(ctx context.Context, msg *types.Message) (*ApplyRet, 
 		)
 	}
 
+	// msg的合法性检查
 	if err := checkMessage(msg); err != nil {
 		return nil, err
 	}
 
+	// 快照
 	st := vm.cstate
 	if err := st.Snapshot(ctx); err != nil {
 		return nil, xerrors.Errorf("snapshot failed: %w", err)
 	}
 
+	// 结算   发送方付费、gasHolder收费
 	fromActor, err := st.GetActor(msg.From)
 	if err != nil {
 		return nil, xerrors.Errorf("from actor not found: %w", err)
@@ -484,11 +502,13 @@ func (vm *VM) ApplyMessage(ctx context.Context, msg *types.Message) (*ApplyRet, 
 		return nil, xerrors.Errorf("failed to withdraw gas funds: %w", err)
 	}
 
+	// 重放保护、消息发送发下调应该发送的消息序号分配
 	if msg.Nonce != fromActor.Nonce {
 		return nil, xerrors.Errorf("invalid nonce (got %d, expected %d)", msg.Nonce, fromActor.Nonce)
 	}
 	fromActor.Nonce++
 
+	// 交易生效，消息执行
 	ret, actorErr, vmctx := vm.send(ctx, msg, nil, msgGasCost)
 
 	if aerrors.IsFatal(actorErr) {
@@ -501,14 +521,18 @@ func (vm *VM) ApplyMessage(ctx context.Context, msg *types.Message) (*ApplyRet, 
 	var errcode uint8
 	var gasUsed types.BigInt
 
+	// == 0 表示没有异常
+	// != 0 表示有异常
 	if errcode = aerrors.RetCode(actorErr); errcode != 0 {
 		gasUsed = msg.GasLimit
 		// revert all state changes since snapshot
+		// 回滚
 		if err := st.Revert(); err != nil {
 			return nil, xerrors.Errorf("revert state failed: %w", err)
 		}
 	} else {
 		// refund unused gas
+		// 正常结算回退没有使用玩的gas
 		gasUsed = vmctx.GasUsed()
 		refund := types.BigMul(types.BigSub(msg.GasLimit, gasUsed), msg.GasPrice)
 		if err := Transfer(gasHolder, fromActor, refund); err != nil {
@@ -523,6 +547,7 @@ func (vm *VM) ApplyMessage(ctx context.Context, msg *types.Message) (*ApplyRet, 
 
 	// TODO: support multiple blocks in a tipset
 	// TODO: actually wire this up (miner is undef for now)
+	// 奖励矿工gas费用，从交易的发起者扣除
 	gasReward := types.BigMul(msg.GasPrice, gasUsed)
 	if err := Transfer(gasHolder, miner, gasReward); err != nil {
 		return nil, xerrors.Errorf("failed to give miner gas reward: %w", err)
@@ -664,6 +689,7 @@ func (vm *VM) SetBlockHeight(h uint64) {
 	vm.blockHeight = h
 }
 
+// 某个actor执行指定方法--代理
 func (vm *VM) Invoke(act *types.Actor, vmctx *VMContext, method uint64, params []byte) ([]byte, aerrors.ActorError) {
 	ctx, span := trace.StartSpan(vmctx.ctx, "vm.Invoke")
 	defer span.End()
@@ -690,6 +716,13 @@ func (vm *VM) Invoke(act *types.Actor, vmctx *VMContext, method uint64, params [
 	return ret, nil
 }
 
+/**
+转账
+
+@param from
+@param to
+@param amt
+ */
 func Transfer(from, to *types.Actor, amt types.BigInt) error {
 	if from == to {
 		return nil
@@ -710,6 +743,9 @@ func (vm *VM) SetInvoker(i *invoker) {
 	vm.inv = i
 }
 
+/**
+扣除资金
+ */
 func deductFunds(act *types.Actor, amt types.BigInt) error {
 	if act.Balance.LessThan(amt) {
 		return fmt.Errorf("not enough funds")
@@ -719,13 +755,18 @@ func deductFunds(act *types.Actor, amt types.BigInt) error {
 	return nil
 }
 
+/**
+存放存款资金
+ */
 func depositFunds(act *types.Actor, amt types.BigInt) {
 	act.Balance = types.BigAdd(act.Balance, amt)
 }
 
 var miningRewardTotal = types.FromFil(build.MiningRewardTotal)
+// 每个tipset的最大区块数量5
 var blocksPerEpoch = types.NewInt(build.BlocksPerEpoch)
 
+// 网络金库
 // MiningReward returns correct mining reward
 //   coffer is amount of FIL in NetworkAddress
 func MiningReward(remainingReward types.BigInt) types.BigInt {

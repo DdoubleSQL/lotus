@@ -39,6 +39,12 @@ func init() {
 	EmptyCBOR = n.Cid()
 }
 
+/**
+VM处理需要两个系统actor：
+
+CronActor ：在每一个epoch运行至关重要的函数。
+InitActor：初始化新的actor，记录网络名称
+ */
 type InitActor struct{}
 
 type InitActorState struct {
@@ -215,6 +221,12 @@ func (ias *InitActorState) Lookup(cst *hamt.CborIpldStore, addr address.Address)
 	return address.NewIDAddress(ival)
 }
 
+/**
+两个VM层的actor：
+
+AccountActor ：用于用户账户（非单例）。
+RewardActor：用于奖励区块和授予代币（单例）。
+ */
 type AccountActorState struct {
 	Address address.Address
 }

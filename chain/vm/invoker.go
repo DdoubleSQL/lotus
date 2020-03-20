@@ -56,6 +56,7 @@ func (inv *invoker) Invoke(act *types.Actor, vmctx types.VMContext, method uint6
 	if method >= uint64(len(code)) || code[method] == nil {
 		return nil, aerrors.Newf(255, "no method %d on actor", method)
 	}
+	// 反射执行
 	return code[method](act, vmctx, params)
 
 }
@@ -70,9 +71,13 @@ func (inv *invoker) Register(c cid.Cid, instance Invokee, state interface{}) {
 }
 
 type Invokee interface {
+	/**
+	 index: func
+	 */
 	Exports() []interface{}
 }
 
+// 值为nil的VMContext和ActorError类型
 var tVMContext = reflect.TypeOf((*types.VMContext)(nil)).Elem()
 var tAError = reflect.TypeOf((*aerrors.ActorError)(nil)).Elem()
 
@@ -124,12 +129,14 @@ func (*invoker) transform(instance Invokee) (nativeCode, error) {
 	code := make(nativeCode, len(exports))
 	for id, m := range exports {
 		meth := reflect.ValueOf(m)
+		// 利用反射生成执行函数，用到了类型断言
 		code[id] = reflect.MakeFunc(reflect.TypeOf((invokeFunc)(nil)),
 			func(in []reflect.Value) []reflect.Value {
 				paramT := meth.Type().In(2).Elem()
 				param := reflect.New(paramT)
 
 				inBytes := in[2].Interface().([]byte)
+				// param 解码
 				if len(inBytes) > 0 {
 					if err := DecodeParams(inBytes, param.Interface()); err != nil {
 						aerr := aerrors.Absorb(err, 1, "failed to decode parameters")

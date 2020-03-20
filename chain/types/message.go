@@ -11,6 +11,20 @@ import (
 	"github.com/filecoin-project/go-address"
 )
 
+
+/**
+
+一定不要传输，也不能在消息池中维护，或者包含进区块内“语义不合法”的消息。 一条语义合法的签名消息需要：
+
+- 有一个格式良好的，非空的From地址
+- 有一个非负的CallSeqNum
+- 其Value不比0小也不能比代币总供应量2e9 * 1e18大
+- 其MethodNum非负
+- 除非MethodNum为0，否则其 Params 不为空
+- 其GasPrice非负
+- 其GasLimit至少要等于消耗的gas量，消耗量与消息序列化后的字节大小有关
+- 其GasLimit不能大于网络中的gas limit参数
+ */
 type Message struct {
 	To   address.Address
 	From address.Address

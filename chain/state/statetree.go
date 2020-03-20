@@ -135,6 +135,8 @@ func (st *StateTree) Flush(ctx context.Context) (cid.Cid, error) {
 	return st.Store.Put(ctx, st.root)
 }
 
+//做一个快照
+// 执行回滚Revert()
 func (st *StateTree) Snapshot(ctx context.Context) error {
 	ctx, span := trace.StartSpan(ctx, "stateTree.SnapShot")
 	defer span.End()
@@ -148,25 +150,30 @@ func (st *StateTree) Snapshot(ctx context.Context) error {
 	return nil
 }
 
+// 为Actor注册一个地址
 func (st *StateTree) RegisterNewAddress(addr address.Address, act *types.Actor) (address.Address, error) {
 	var out address.Address
 	err := st.MutateActor(actors.InitAddress, func(initact *types.Actor) error {
 		var ias actors.InitActorState
+
+		// 检查是否新的actor已经有状态树，有的话存入ias
 		if err := st.Store.Get(context.TODO(), initact.Head, &ias); err != nil {
 			return err
 		}
 
+		// 将新actor存入ipld
 		oaddr, err := ias.AddActor(st.Store, addr)
 		if err != nil {
 			return err
 		}
 		out = oaddr
 
+		// 将新actor的状态树存入ipld
 		ncid, err := st.Store.Put(context.TODO(), &ias)
 		if err != nil {
 			return err
 		}
-
+		// 设置新Actor的状态树的cid
 		initact.Head = ncid
 		return nil
 	})
@@ -181,6 +188,8 @@ func (st *StateTree) RegisterNewAddress(addr address.Address, act *types.Actor) 
 	return out, nil
 }
 
+// 快照回退
+// 生成快照：Snapshot
 func (st *StateTree) Revert() error {
 	nd, err := hamt.LoadNode(context.Background(), st.Store, st.snapshot)
 	if err != nil {
@@ -192,6 +201,11 @@ func (st *StateTree) Revert() error {
 }
 
 // mutate 突变转变
+//
+/**
+ @param addr initAddress
+ @param f cb
+ */
 func (st *StateTree) MutateActor(addr address.Address, f func(*types.Actor) error) error {
 	act, err := st.GetActor(addr)
 	if err != nil {
