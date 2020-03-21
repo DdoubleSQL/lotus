@@ -414,6 +414,7 @@ func FullAPI(out *api.FullNode) Option {
 
 type StopFunc func(context.Context) error
 
+// 创建并启动节点
 // New builds and starts new Filecoin node
 func New(ctx context.Context, opts ...Option) (StopFunc, error) {
 	settings := Settings{
@@ -440,6 +441,7 @@ func New(ctx context.Context, opts ...Option) (StopFunc, error) {
 		}
 	}
 
+	// FX容器的创建
 	app := fx.New(
 		fx.Options(ctors...),
 		fx.Options(settings.invokes...),
@@ -450,11 +452,13 @@ func New(ctx context.Context, opts ...Option) (StopFunc, error) {
 	// TODO: we probably should have a 'firewall' for Closing signal
 	//  on this context, and implement closing logic through lifecycles
 	//  correctly
+	// FX容器的启动
 	if err := app.Start(ctx); err != nil {
 		// comment fx.NopLogger few lines above for easier debugging
 		return nil, err
 	}
 
+	// FX容器的关闭函数
 	return app.Stop, nil
 }
 

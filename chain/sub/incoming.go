@@ -39,6 +39,7 @@ func HandleIncomingBlocks(ctx context.Context, bsub *pubsub.Subscription, s *cha
 			log.Warnf("pubsub block validator passed on wrong type: %#v", msg.ValidatorData)
 		}
 
+		// 异步处理新块，父亲携程继续侦听
 		go func() {
 			log.Infof("New block over pubsub: %s", blk.Cid())
 

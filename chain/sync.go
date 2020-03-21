@@ -136,6 +136,7 @@ func (syncer *Syncer) InformNewHead(from peer.ID, fts *store.FullTipSet) bool {
 		}
 	}
 
+	// 本地发布，本节点发布
 	syncer.incoming.Pub(fts.TipSet().Blocks(), LocalIncoming)
 
 	if from == syncer.self {
@@ -159,6 +160,7 @@ func (syncer *Syncer) InformNewHead(from peer.ID, fts *store.FullTipSet) bool {
 
 	syncer.Bsync.AddPeer(from)
 
+	// 权重选择，如果不比当前最佳大，就忽略
 	bestPweight := syncer.store.GetHeaviestTipSet().Blocks()[0].ParentWeight
 	targetWeight := fts.TipSet().Blocks()[0].ParentWeight
 	if targetWeight.LessThan(bestPweight) {
@@ -170,6 +172,7 @@ func (syncer *Syncer) InformNewHead(from peer.ID, fts *store.FullTipSet) bool {
 		return false
 	}
 
+	// 更新最佳ts的头部
 	syncer.syncmgr.SetPeerHead(ctx, from, fts.TipSet())
 	return true
 }
@@ -402,10 +405,12 @@ func (syncer *Syncer) Sync(ctx context.Context, maybeHead *types.TipSet) error {
 		)
 	}
 
+	// maybeTs的权重不够大，丢弃
 	if syncer.store.GetHeaviestTipSet().ParentWeight().GreaterThan(maybeHead.ParentWeight()) {
 		return nil
 	}
 
+	// maybeTs 是创世 或者 链上最新ts 同样返回不处理
 	if syncer.Genesis.Equals(maybeHead) || syncer.store.GetHeaviestTipSet().Equals(maybeHead) {
 		return nil
 	}

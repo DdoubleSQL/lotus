@@ -49,6 +49,7 @@ func RunBlockSync(h host.Host, svc *blocksync.BlockSyncService) {
 	h.SetStreamHandler(blocksync.BlockSyncProtocolID, svc.HandleStream)
 }
 
+// 异步处理新块
 func HandleIncomingBlocks(mctx helpers.MetricsCtx, lc fx.Lifecycle, ps *pubsub.PubSub, s *chain.Syncer, h host.Host) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
 
@@ -57,6 +58,7 @@ func HandleIncomingBlocks(mctx helpers.MetricsCtx, lc fx.Lifecycle, ps *pubsub.P
 		panic(err)
 	}
 
+	// 如果是个坏东西！永久封杀这个节点
 	v := sub.NewBlockValidator(func(p peer.ID) {
 		ps.BlacklistPeer(p)
 		h.ConnManager().TagPeer(p, "badblock", -1000)
@@ -66,6 +68,7 @@ func HandleIncomingBlocks(mctx helpers.MetricsCtx, lc fx.Lifecycle, ps *pubsub.P
 		panic(err)
 	}
 
+	// 异步处理新块
 	go sub.HandleIncomingBlocks(ctx, blocksub, s, h.ConnManager())
 }
 

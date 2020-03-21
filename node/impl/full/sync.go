@@ -40,6 +40,7 @@ func (a *SyncAPI) SyncState(ctx context.Context) (*api.SyncState, error) {
 	return out, nil
 }
 
+// 发布新块
 func (a *SyncAPI) SyncSubmitBlock(ctx context.Context, blk *types.BlockMsg) error {
 	// TODO: should we have some sort of fast path to adding a local block?
 	bmsgs, err := a.Syncer.ChainStore().LoadMessagesFromCids(blk.BlsMessages)
@@ -66,6 +67,7 @@ func (a *SyncAPI) SyncSubmitBlock(ctx context.Context, blk *types.BlockMsg) erro
 	if err != nil {
 		return xerrors.Errorf("somehow failed to make a tipset out of a single block: %w", err)
 	}
+	// 做一次链的同步，有点像是在写一个分布式DB
 	if err := a.Syncer.Sync(ctx, ts); err != nil {
 		return xerrors.Errorf("sync to submitted block failed: %w", err)
 	}
@@ -76,6 +78,7 @@ func (a *SyncAPI) SyncSubmitBlock(ctx context.Context, blk *types.BlockMsg) erro
 	}
 
 	// TODO: anything else to do here?
+	// 全网广播新块消息
 	return a.PubSub.Publish("/fil/blocks", b)
 }
 
