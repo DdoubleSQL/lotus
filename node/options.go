@@ -6,6 +6,14 @@ import (
 	"go.uber.org/fx"
 )
 
+
+
+/**
+   一个有趣的编码形式
+
+   [Self-referential functions and the design of options](https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html)
+
+ */
 // Option is a functional option which can be used with the New function to
 // change how the node is constructed
 //

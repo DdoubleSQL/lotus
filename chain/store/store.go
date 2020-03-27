@@ -42,6 +42,17 @@ var log = logging.Logger("chainstore")
 
 var chainHeadKey = dstore.NewKey("head")
 
+/**
+
+ChainStore，用于存储区块链相关信息，包括区块头，相关消息等
+
+StateStore，用于存储来自给定区块链的有效载荷状态，或者由FilecoinVM将给定链中所有区块消息产生的stateTree应用于genesis state。
+
+ChainStore在ChainSync（ ChainSync - synchronizing the Blockchain）的引导阶段由节点从其对等节点下载，同步至区块链然后由节点存储。 每次接收到新的区块时，或者节点同步到一个新的最佳链时，都会对其进行更新。
+
+StateStore是通过执行给定ChainStore中所有区块消息来计算的，然后由节点存储。它通过 VM Interpreter - Message Invocation (Outside VM)更新每个新传入块的处理，并相应地由在它上面的块在块头的ParentState字段中生成的新块引用。
+
+ */
 // 封装了对链的访问接口
 // 如何构建一个协议里面的链？
 // 构建block、tipsets、chain

@@ -55,7 +55,11 @@ type API struct {
 	Blockstore dtypes.ClientBlockstore
 	Filestore  dtypes.ClientFilestore `optional:"true"`
 }
-
+/**
+client发起一笔交易
+params { fileCid, walletAddr, storageMinerAddr, epochPrice }
+return { dealCid }
+*/
 func (a *API) ClientStartDeal(ctx context.Context, data cid.Cid, addr address.Address, miner address.Address, epochPrice types.BigInt, blocksDuration uint64) (*cid.Cid, error) {
 	exist, err := a.WalletHas(ctx, addr)
 	if err != nil {
@@ -74,6 +78,20 @@ func (a *API) ClientStartDeal(ctx context.Context, data cid.Cid, addr address.Ad
 	if err != nil {
 		return nil, xerrors.Errorf("failed getting miner worker: %w", err)
 	}
+	/**
+	StorageProviderInfo {
+		Address    address.Address // actor address
+		Owner      address.Address // Account that owns this miner
+		Worker     address.Address // Worker account for this miner. signs messages
+		SectorSize uint64         // Amount of space in each sector committed to the network by this miner.
+		PeerID     peer.ID         // Libp2p identity that should be used when connecting to this miner.
+	}
+
+	Worker     address.Address
+	// This will be the key that is used to sign blocks created by this miner, and
+	// sign messages sent on behalf of this miner to commit sectors, submit PoSts, and
+	// other day to day miner activities.
+	 */
 	providerInfo := utils.NewStorageProviderInfo(miner, mw, 0, pid)
 	result, err := a.SMDealClient.ProposeStorageDeal(
 		ctx,
@@ -118,6 +136,10 @@ func (a *API) ClientListDeals(ctx context.Context) ([]api.DealInfo, error) {
 	return out, nil
 }
 
+/**
+@param cid.Cid d 交易id
+@return DealInfo 交易信息
+ */
 func (a *API) ClientGetDealInfo(ctx context.Context, d cid.Cid) (*api.DealInfo, error) {
 	v, err := a.SMDealClient.GetInProgressDeal(ctx, d)
 	if err != nil {
@@ -215,11 +237,17 @@ func (a *API) ClientImport(ctx context.Context, path string) (cid.Cid, error) {
 	return nd.Cid(), nil
 }
 
+/**
+ * @param ctx
+ * @param io.Reader f client 要付费存储的文件流
+ * @return cid cid.Cid 文件存好后的DAG的cid
+ */
 func (a *API) ClientImportLocal(ctx context.Context, f io.Reader) (cid.Cid, error) {
 	file := files.NewReaderFile(f)
 
 	bufferedDS := ipld.NewBufferedDAG(ctx, a.LocalDAG)
 
+	// 构建file的存储入参
 	params := ihelper.DagBuilderParams{
 		Maxlinks:   build.UnixfsLinksPerLevel,
 		RawLeaves:  true,
@@ -227,15 +255,17 @@ func (a *API) ClientImportLocal(ctx context.Context, f io.Reader) (cid.Cid, erro
 		Dagserv:    bufferedDS,
 	}
 
+	// file分块存储
 	db, err := params.New(chunker.NewSizeSplitter(file, int64(build.UnixfsChunkSize)))
 	if err != nil {
 		return cid.Undef, err
 	}
+	// DAG 构建
 	nd, err := balanced.Layout(db)
 	if err != nil {
 		return cid.Undef, err
 	}
-
+	// 存入本地，并返回cid和状态
 	return nd.Cid(), bufferedDS.Commit()
 }
 

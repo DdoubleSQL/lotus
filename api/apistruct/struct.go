@@ -17,6 +17,7 @@ import (
 )
 
 // All permissions are listed in permissioned.go
+// 使用反射做权限控制
 var _ = AllPermissions
 
 type CommonStruct struct {
