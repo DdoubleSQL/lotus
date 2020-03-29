@@ -59,6 +59,7 @@ type API struct {
 client发起一笔交易
 params { fileCid, walletAddr, storageMinerAddr, epochPrice }
 return { dealCid }
+交易的市场端处理在node/modules/storageminer.go:HandleDeals
 */
 func (a *API) ClientStartDeal(ctx context.Context, data cid.Cid, addr address.Address, miner address.Address, epochPrice types.BigInt, blocksDuration uint64) (*cid.Cid, error) {
 	exist, err := a.WalletHas(ctx, addr)
@@ -92,7 +93,9 @@ func (a *API) ClientStartDeal(ctx context.Context, data cid.Cid, addr address.Ad
 	// sign messages sent on behalf of this miner to commit sectors, submit PoSts, and
 	// other day to day miner activities.
 	 */
+	// 选一个存储矿工
 	providerInfo := utils.NewStorageProviderInfo(miner, mw, 0, pid)
+	// DealFlow Negotiation-init
 	result, err := a.SMDealClient.ProposeStorageDeal(
 		ctx,
 		addr,
@@ -351,6 +354,13 @@ func (a *API) ClientRetrieve(ctx context.Context, order api.RetrievalOrder, path
 	return files.WriteTo(file, path)
 }
 
+/**
+客户端查询要价
+
+目前还没有代码调用这个函数
+
+可以试着加上交易所的代码实现交易匹配功能
+ */
 func (a *API) ClientQueryAsk(ctx context.Context, p peer.ID, miner address.Address) (*types.SignedStorageAsk, error) {
 	info := utils.NewStorageProviderInfo(miner, address.Undef, 0, p)
 	signedAsk, err := a.SMDealClient.GetAsk(ctx, info)

@@ -21,6 +21,15 @@ import (
 	"github.com/filecoin-project/lotus/lib/sigs"
 )
 
+/**
+StorageMarketActor is responsible for processing and managing on-chain deals.
+This is also the entry point of all storage deals and data into the system.
+It maintains a mapping of StorageDealID to StorageDeal and keeps track of
+locked balances of StorageClient and StorageProvider. When a deal is posted
+on chain through the StorageMarketActor, it will first check if both
+transacting parties have sufficient balances locked up and include the
+deal on chain.
+ */
 type StorageMarketActor struct{}
 
 type smaMethods struct {
@@ -203,6 +212,12 @@ func (sma StorageMarketActor) WithdrawBalance(act *types.Actor, vmctx types.VMCo
 	return nil, vmctx.Storage().Commit(old, nroot)
 }
 
+/**
+存储方质押
+Before sending a proposal to the provider,
+the StorageClient adds funds for a deal, as necessary,
+to the StorageMarketActor (by calling AddBalance)
+ */
 func (sma StorageMarketActor) AddBalance(act *types.Actor, vmctx types.VMContext, params *struct{}) ([]byte, ActorError) {
 	var self StorageMarketState
 	old := vmctx.Storage().GetHead()

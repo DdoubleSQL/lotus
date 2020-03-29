@@ -142,6 +142,26 @@ func HandleRetrieval(host host.Host, lc fx.Lifecycle, m retrievalmarket.Retrieva
 	})
 }
 
+/**
+节点
+存储市场-Negotiation
+收到客户端的交易请求，执行存储市场的Run方法
+
+Execution now moves to the StorageProvider
+
+The StorageProvider inspects the deal to verify that its
+parameters match it own internal criteria (such as price,
+piece size, deal duration, etc) – and rejects the proposal
+if it doesn’t (it sends a rejection to the client over the
+Storage Deal Protocol)
+The StorageProvider queries the StorageMarketActor to verify
+the StorageClient has deposited enough funds to make the deal
+(i.e. balance > total storage price) and rejects the proposal if it hasn’t.
+If all criteria are met, the StorageProvider responds using
+the Storage Deal Protocol indicate an intent to accept the deal.
+
+使用状态机Finite State Machine
+ */
 func HandleDeals(mctx helpers.MetricsCtx, lc fx.Lifecycle, host host.Host, h storagemarket.StorageProvider) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
 
