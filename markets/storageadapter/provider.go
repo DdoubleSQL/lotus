@@ -43,6 +43,13 @@ func NewProviderNodeAdapter(dag dtypes.StagingDAG, secb *sectorblocks.SectorBloc
 	}
 }
 
+/**
+StorageMarketProvider publish on chain
+数据现在已经转移，双方都同意了，现在是公布交易的时候了。假设交易建议上的反签名是提供者的标准消息签名，
+而签名的交易是链上消息，则通常是发布交易的存储提供者。但是，如果StorageProvider决定在调用PublishStorageDeal
+之前将这个签名的on-chain消息发送给客户端，那么客户端可以在chain上发布该交易。在交易公布前，客户的资金不会被锁定，
+而在某些窗口内未激活的已公布交易将导致链上惩罚。
+ */
 func (n *ProviderNodeAdapter) PublishDeals(ctx context.Context, deal storagemarket.MinerDeal) (storagemarket.DealID, cid.Cid, error) {
 	log.Info("publishing deal")
 
@@ -94,6 +101,14 @@ func (n *ProviderNodeAdapter) PublishDeals(ctx context.Context, deal storagemark
 	return storagemarket.DealID(resp.DealIDs[0]), smsg.Cid(), nil
 }
 
+/**
+Handoff
+
+Now that a deal is published, it needs to be stored, sealed,
+and proven in order for the provider to be paid. (see for more information about how deal payments
+are made) These later stages of a deal are handled by the Storage Miner.
+So the final task for the Storage Market is to handoff to the Storage Mining Subsystem
+ */
 func (n *ProviderNodeAdapter) OnDealComplete(ctx context.Context, deal storagemarket.MinerDeal, piecePath string) (uint64, error) {
 	root, err := n.dag.Get(ctx, deal.Ref)
 	if err != nil {

@@ -60,6 +60,9 @@ client发起一笔交易
 params { fileCid, walletAddr, storageMinerAddr, epochPrice }
 return { dealCid }
 交易的市场端处理在node/modules/storageminer.go:HandleDeals
+存储市场的数据传送给对端代码实现入口
+  - go-fil-markets/storagemarket/impl/provider.go:75
+  - go-fil-markets/storagemarket/impl/provider.go:207
 */
 func (a *API) ClientStartDeal(ctx context.Context, data cid.Cid, addr address.Address, miner address.Address, epochPrice types.BigInt, blocksDuration uint64) (*cid.Cid, error) {
 	exist, err := a.WalletHas(ctx, addr)

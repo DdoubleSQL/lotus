@@ -302,6 +302,7 @@ func NewProviderRequestValidator(deals dtypes.ProviderDealStore) *storageimpl.Pr
 }
 
 func StorageProvider(ds dtypes.MetadataDS, dag dtypes.StagingDAG, dataTransfer dtypes.ProviderDataTransfer, spn storagemarket.StorageProviderNode) (storagemarket.StorageProvider, error) {
+	// 注册一个-存储市场的-数据传输工具
 	return storageimpl.NewProvider(ds, dag, dataTransfer, spn)
 }
 
